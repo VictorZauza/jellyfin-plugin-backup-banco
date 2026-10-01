@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <title>Backup do Banco</title>
+</head>
+<body>
+<div id="BackupBancoConfigPage" data-role="page" class="page type-interior pluginConfigurationPage"
+     data-require="emby-input,emby-button,emby-select,emby-checkbox">
+    <div data-role="content">
+        <div class="content-primary">
+
+            <style>
+                .bb-section { margin-bottom: 2.4em; }
+                .bb-section h2 { margin-bottom: .3em; }
+                .bb-sub { color: #999; margin: 0 0 1em; font-size: .92em; }
+                .bb-box {
+                    padding: .9em 1.1em; border-radius: 8px;
+                    background: rgba(0,164,220,.08); border: 1px solid rgba(0,164,220,.25);
+                    word-break: break-word;
+                }
+                .bb-box div { margin: .2em 0; }
+                .bb-rotulo { color: #999; display: inline-block; min-width: 10em; }
+                .bb-linha {
+                    display: flex; flex-wrap: wrap; gap: .6em; align-items: center;
+                    padding: .55em 0; border-bottom: 1px solid rgba(255,255,255,.08);
+                }
+                .bb-linha .bb-grow { flex: 1 1 220px; word-break: break-all; }
+                .bb-meta { color: #999; font-size: .85em; }
+                .bb-vazio { color: #999; padding: .6em 0; }
+                .bb-aviso {
+                    padding: .7em .9em; border-radius: 8px; margin-top: .8em;
+                    background: rgba(229,72,77,.10); border: 1px solid rgba(229,72,77,.35);
+                }
+                .bb-acoes { display: flex; flex-wrap: wrap; gap: .5em; margin: 1em 0; }
+                .bb-acoes button { margin: 0; }
+            </style>
+
+            <div class="bb-section">
+                <h2>Situação</h2>
+                <div class="bb-box">
+                    <div><span class="bb-rotulo">Pasta de destino:</span> <code id="bbPasta">&nbsp;</code></div>
+                    <div><span class="bb-rotulo">Última execução:</span> <span id="bbUltima">—</span></div>
+                    <div><span class="bb-rotulo">Resultado:</span> <span id="bbResultado">—</span></div>
+                </div>
+                <div id="bbAvisoOnline" class="bb-aviso" style="display:none">
+                    O backup online do SQLite não está disponível neste servidor. Os bancos serão
+                    copiados como arquivo, junto com os <code>-wal</code> e <code>-shm</code>. Funciona,
+                    mas a consistência não é garantida com o servidor em uso — prefira rodar o backup
+                    em horário de pouco movimento.
+                </div>
+
+                <div class="bb-acoes">
+                    <button is="emby-button" type="button" id="bbExecutar" class="raised button-submit">
+                        <span>Fazer backup agora</span>
+                    </button>
+                    <button is="emby-button" type="button" id="bbAtualizar" class="raised">
+                        <span>Atualizar</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="bb-section">
+                <h2>Backups existentes</h2>
+                <p class="bb-sub">Os mais antigos são removidos automaticamente conforme a retenção.</p>
+                <div id="bbLista"></div>
+            </div>
+
+            <div class="bb-section">
+                <h2>Configurações</h2>
+                <form id="BackupBancoConfigForm">
+
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="DestinationPath">Pasta de destino</label>
+                        <input id="DestinationPath" name="DestinationPath" type="text" is="emby-input"/>
+                        <div class="fieldDescription">
+                            Caminho <strong>dentro do contêiner</strong>. Vazio usa a pasta
+                            <code>plugin-backups</code> ao lado da configuração do servidor.
+                            Para guardar fora do contêiner, use um caminho que esteja montado por volume.
+                        </div>
+                    </div>
+
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="DailyTime">Horário do backup diário</label>
+                        <input id="DailyTime" name="DailyTime" type="text" is="emby-input" placeholder="03:30"/>
+                        <div class="fieldDescription">
+                            No formato 24h, <code>HH:mm</code>. Alterar aqui exige reiniciar o Jellyfin
+                            para o agendamento ser recriado; sem reiniciar, ajuste direto em
+                            Painel → Tarefas Agendadas.
+                        </div>
+                    </div>
+
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused" for="RetentionCount">Quantos backups manter</label>
+                        <input id="RetentionCount" name="RetentionCount" type="number" is="emby-input" min="0" max="365"/>
+                        <div class="fieldDescription">Zero desliga a remoção automática.</div>
+                    </div>
+
+                    <h3>O que incluir</h3>
+
+                    <div class="checkboxContainer checkboxContainerWithDescription">
+                        <label class="emby-checkbox-label">
+                            <input id="IncludeDatabases" type="checkbox" is="emby-checkbox"/>
+                            <span>Bancos de dados</span>
+                        </label>
+                        <div class="fieldDescription checkboxFieldDescription">
+                            Usuários, bibliotecas, progresso de reprodução e favoritos.
+                        </div>
+                    </div>
+
+                    <div class="checkboxContainer checkboxContainerWithDescription">
+                        <label class="emby-checkbox-label">
+                            <input id="IncludeConfig" type="checkbox" is="emby-checkbox"/>
+                            <span>Configuração do servidor</span>
+                        </label>
+                        <div class="fieldDescription checkboxFieldDescription">
+                            Os XML do servidor: rede, codificação, bibliotecas.
+                        </div>
+                    </div>
+
+                    <div class="checkboxContainer checkboxContainerWithDescription">
+                        <label class="emby-checkbox-label">
+                            <input id="IncludePluginConfigs" type="checkbox" is="emby-checkbox"/>
+                            <span>Configuração dos plugins</span>
+                        </label>
+                        <div class="fieldDescription checkboxFieldDescription">
+                            Inclui as suas configurações do plugin de cadastro de usuários.
+                        </div>
+                    </div>
+
+                    <div>
+                        <button is="emby-button" type="submit" class="raised button-submit block emby-button">
+                            <span>Salvar</span>
+                        </button>
+                    </div>
+                </form>
+                <p class="bb-sub" style="margin-top:1em">
+                    Capas, metadados e cache ficam de fora de propósito: são recriáveis e deixariam
+                    o arquivo grande demais para ter valor como cópia de segurança.
+                </p>
+            </div>
+
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        (function () {
+            var ID = '7c2a1e94-5b6d-4f08-9a31-2e8c4d7b15af';
+            var page = document.querySelector('#BackupBancoConfigPage');
+
+            function api(path) { return ApiClient.getUrl('BackupBanco/' + path); }
+
+            function esc(v) {
+                return String(v === null || v === undefined ? '' : v)
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            }
+
+            function fmtData(v) {
+                if (!v) { return '—'; }
+                var d = new Date(v);
+                return isNaN(d.getTime()) ? '—' : d.toLocaleString();
+            }
+
+            function fmtTamanho(b) {
+                if (!b) { return '0 MB'; }
+                return (b / 1048576).toFixed(1) + ' MB';
+            }
+
+            function carregarStatus() {
+                return ApiClient.getJSON(api('Status')).then(function (s) {
+                    page.querySelector('#bbPasta').textContent = s.DestinationPath || '—';
+                    page.querySelector('#bbUltima').textContent = fmtData(s.LastRunUtc);
+                    page.querySelector('#bbResultado').textContent = s.LastResult || '—';
+                    page.querySelector('#bbAvisoOnline').style.display = s.OnlineBackupAvailable ? 'none' : '';
+                });
+            }
+
+            function carregarLista() {
+                return ApiClient.getJSON(api('Backups')).then(function (itens) {
+                    var alvo = page.querySelector('#bbLista');
+                    if (!itens || !itens.length) {
+                        alvo.innerHTML = '<div class="bb-vazio">Nenhum backup ainda.</div>';
+                        return;
+                    }
+                    alvo.innerHTML = itens.map(function (b) {
+                        return '<div class="bb-linha">' +
+                            '<div class="bb-grow"><div>' + esc(b.FileName) + '</div>' +
+                            '<div class="bb-meta">' + fmtData(b.CreatedUtc) + ' · ' + fmtTamanho(b.SizeBytes) + '</div></div>' +
+                            '<button is="emby-button" type="button" class="raised bb-baixar" data-n="' + esc(b.FileName) + '"><span>Baixar</span></button>' +
+                            '<button is="emby-button" type="button" class="raised bb-apagar" data-n="' + esc(b.FileName) + '"><span>Apagar</span></button>' +
+                            '</div>';
+                    }).join('');
+
+                    alvo.querySelectorAll('.bb-baixar').forEach(function (b) {
+                        b.addEventListener('click', function () {
+                            var url = ApiClient.getUrl('BackupBanco/Backups/' + encodeURIComponent(b.dataset.n) + '/Download',
+                                { api_key: ApiClient.accessToken() });
+                            window.open(url, '_blank', 'noopener');
+                        });
+                    });
+
+                    alvo.querySelectorAll('.bb-apagar').forEach(function (b) {
+                        b.addEventListener('click', function () {
+                            var nome = b.dataset.n;
+                            var pergunta = 'Apagar "' + nome + '"? Isso não pode ser desfeito.';
+                            var ask = (window.Dashboard && Dashboard.confirm)
+                                ? Dashboard.confirm(pergunta, 'Apagar backup')
+                                : Promise.resolve(window.confirm(pergunta));
+                            Promise.resolve(ask).then(function (ok) {
+                                if (ok === false) { return; }
+                                ApiClient.ajax({ type: 'DELETE', url: api('Backups/' + encodeURIComponent(nome)) })
+                                    .then(carregarLista, function () { Dashboard.alert('Não foi possível apagar.'); });
+                            });
+                        });
+                    });
+                });
+            }
+
+            function carregarConfig() {
+                return ApiClient.getPluginConfiguration(ID).then(function (c) {
+                    page.querySelector('#DestinationPath').value = c.DestinationPath || '';
+                    page.querySelector('#DailyTime').value = c.DailyTime || '03:30';
+                    page.querySelector('#RetentionCount').value = c.RetentionCount;
+                    page.querySelector('#IncludeDatabases').checked = c.IncludeDatabases;
+                    page.querySelector('#IncludeConfig').checked = c.IncludeConfig;
+                    page.querySelector('#IncludePluginConfigs').checked = c.IncludePluginConfigs;
+                });
+            }
+
+            function recarregar() {
+                return Promise.all([carregarStatus(), carregarLista()]);
+            }
+
+            page.addEventListener('pageshow', function () {
+                Dashboard.showLoadingMsg();
+                Promise.all([carregarConfig(), recarregar()]).then(function () {
+                    Dashboard.hideLoadingMsg();
+                }, function () {
+                    Dashboard.hideLoadingMsg();
+                });
+            });
+
+            page.querySelector('#bbAtualizar').addEventListener('click', function () {
+                Dashboard.showLoadingMsg();
+                recarregar().then(function () { Dashboard.hideLoadingMsg(); });
+            });
+
+            page.querySelector('#bbExecutar').addEventListener('click', function () {
+                Dashboard.showLoadingMsg();
+                ApiClient.ajax({ type: 'POST', url: api('Run') }).then(function () {
+                    Dashboard.hideLoadingMsg();
+                    Dashboard.alert('Backup enfileirado. Acompanhe em Painel → Tarefas Agendadas; '
+                        + 'o resultado aparece aqui em Situação quando terminar.');
+                    // dá tempo para a tarefa começar antes de atualizar a tela
+                    setTimeout(recarregar, 8000);
+                }, function () {
+                    Dashboard.hideLoadingMsg();
+                    Dashboard.alert('Não foi possível enfileirar o backup.');
+                });
+            });
+
+            page.querySelector('#BackupBancoConfigForm').addEventListener('submit', function (e) {
+                e.preventDefault();
+                Dashboard.showLoadingMsg();
+                ApiClient.getPluginConfiguration(ID).then(function (c) {
+                    c.DestinationPath = page.querySelector('#DestinationPath').value.trim();
+                    c.DailyTime = page.querySelector('#DailyTime').value.trim() || '03:30';
+                    c.RetentionCount = parseInt(page.querySelector('#RetentionCount').value, 10);
+                    if (isNaN(c.RetentionCount) || c.RetentionCount < 0) { c.RetentionCount = 7; }
+                    c.IncludeDatabases = page.querySelector('#IncludeDatabases').checked;
+                    c.IncludeConfig = page.querySelector('#IncludeConfig').checked;
+                    c.IncludePluginConfigs = page.querySelector('#IncludePluginConfigs').checked;
+                    ApiClient.updatePluginConfiguration(ID, c).then(function (r) {
+                        Dashboard.processPluginConfigurationUpdateResult(r);
+                        carregarStatus();
+                    });
+                });
+                return false;
+            });
+        })();
+    </script>
+</div>
+</body>
+</html>

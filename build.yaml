@@ -1,0 +1,17 @@
+---
+name: "Backup do Banco"
+guid: "7c2a1e94-5b6d-4f08-9a31-2e8c4d7b15af"
+version: "1.0.0.0"
+targetAbi: "10.11.0.0"
+framework: "net9.0"
+overview: "Backup automático dos bancos e das configurações"
+description: >
+  Copia os bancos de dados e os arquivos de configuração do Jellyfin para um .zip,
+  diariamente ou sob demanda, mantendo apenas os mais recentes. Usa o backup online
+  do SQLite, que gera cópia consistente com o servidor em uso.
+category: "General"
+owner: "victor.flores"
+artifacts:
+  - "Jellyfin.Plugin.BackupBanco.dll"
+changelog: >
+  1.0.0.0 - Primeira versão.
